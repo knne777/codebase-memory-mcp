@@ -1,7 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { colorForLabel } from "../lib/colors";
 import type { GraphNode, GraphEdge } from "../lib/types";
+import { callTool } from "../api/rpc";
+import { MermaidDiagram } from "./MermaidDiagram";
+import { Loader2, GitBranch, Terminal } from "lucide-react";
 
 interface Connection {
   node: GraphNode;
@@ -11,13 +14,45 @@ interface Connection {
 
 interface NodeDetailPanelProps {
   node: GraphNode;
+  project: string;
   allNodes: GraphNode[];
   allEdges: GraphEdge[];
   onClose: () => void;
   onNavigate: (node: GraphNode) => void;
 }
 
-export function NodeDetailPanel({ node, allNodes, allEdges, onClose, onNavigate }: NodeDetailPanelProps) {
+export function NodeDetailPanel({ node, project, allNodes, allEdges, onClose, onNavigate }: NodeDetailPanelProps) {
+  const [diagram, setDiagram] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const canHaveDiagram = ["Function", "Method", "Route"].includes(node.label);
+
+  const fetchDiagram = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await callTool<{ text: string }>("generate_diagram", {
+        project,
+        function_name: node.qualified_name || node.name,
+        type: "sequence",
+        depth: 3
+      });
+      // The RPC client might return the string directly or wrapped
+      const text = typeof result === "string" ? result : (result as any).text || JSON.stringify(result);
+      setDiagram(text);
+    } catch (err: any) {
+      setError(err.message || "Failed to load diagram");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    setDiagram(null);
+    setError(null);
+  }, [node]);
+
   const connections = useMemo(() => {
     const nodeMap = new Map<number, GraphNode>();
     for (const n of allNodes) nodeMap.set(n.id, n);
@@ -45,55 +80,115 @@ export function NodeDetailPanel({ node, allNodes, allEdges, onClose, onNavigate 
   };
 
   return (
-    <div className="w-full bg-[#0b1920]/95 backdrop-blur-xl flex flex-col h-full min-h-0 overflow-hidden">
+    <div className="w-full bg-[#0b1920]/95 backdrop-blur-xl flex flex-col h-full min-h-0 overflow-hidden border-l border-white/5 shadow-2xl">
       {/* Header */}
-      <div className="px-4 pt-4 pb-3 border-b border-border/30">
-        <div className="flex items-start justify-between gap-2 mb-2">
+      <div className="px-5 pt-6 pb-5 border-b border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent">
+        <div className="flex items-start justify-between gap-4 mb-3">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: colorForLabel(node.label) }} />
-              <h3 className="text-[13px] font-semibold text-foreground truncate">{node.name}</h3>
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-2.5 h-2.5 rounded-full ring-4 ring-black/20" style={{ backgroundColor: colorForLabel(node.label) }} />
+              <h3 className="text-[15px] font-bold text-white truncate tracking-tight">{node.name}</h3>
             </div>
-            <span
-              className="inline-block px-2 py-0.5 rounded-md text-[10px] font-medium"
-              style={{ backgroundColor: colorForLabel(node.label) + "18", color: colorForLabel(node.label) }}
-            >
-              {node.label}
-            </span>
+            <div className="flex items-center gap-2">
+              <span
+                className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                style={{ backgroundColor: colorForLabel(node.label) + "20", color: colorForLabel(node.label) }}
+              >
+                {node.label}
+              </span>
+              {node.properties_json && node.properties_json.includes('"is_business_logic":true') && (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                  Business Logic
+                </span>
+              )}
+            </div>
           </div>
-          <button onClick={onClose} className="text-foreground/20 hover:text-foreground/50 transition-colors text-[16px] leading-none p-1">×</button>
+          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-white/30 hover:text-white/70 hover:bg-white/5 transition-all text-[20px] leading-none">×</button>
         </div>
 
         {node.file_path && (
-          <p className="text-[11px] text-foreground/30 font-mono mt-2 break-all leading-relaxed">{node.file_path}</p>
+          <div className="flex items-center gap-2 text-[11px] text-white/40 font-mono mt-3 px-3 py-2 bg-black/20 rounded-lg border border-white/[0.03]">
+            <Terminal size={12} className="shrink-0" />
+            <span className="truncate">{node.file_path}:{node.start_line}</span>
+          </div>
         )}
 
         {/* Stats */}
-        <div className="flex gap-5 mt-3">
+        <div className="flex gap-6 mt-5 px-1">
           {[
-            { label: "Out", value: outbound.length, color: "text-primary" },
-            { label: "In", value: inbound.length, color: "text-accent" },
-            { label: "Total", value: connections.length, color: "text-foreground" },
+            { label: "Outbound", value: outbound.length, color: "text-blue-400" },
+            { label: "Inbound", value: inbound.length, color: "text-emerald-400" },
+            { label: "Total", value: connections.length, color: "text-white/60" },
           ].map((s) => (
             <div key={s.label}>
-              <p className="text-[9px] text-foreground/25 uppercase tracking-widest">{s.label}</p>
-              <p className={`text-[18px] font-semibold tabular-nums ${s.color}`}>{s.value}</p>
+              <p className="text-[9px] text-white/20 uppercase font-black tracking-[0.15em] mb-1">{s.label}</p>
+              <p className={`text-[20px] font-black tabular-nums tracking-tight ${s.color}`}>{s.value}</p>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Connections */}
+      {/* Tabs / Content */}
       <ScrollArea className="flex-1 min-h-0">
-        <div className="px-4 py-3 space-y-4">
+        <div className="px-5 py-5 space-y-8">
+          {/* Flow Diagram Section */}
+          {canHaveDiagram && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-[11px] font-bold text-white/50 uppercase tracking-widest">
+                  <GitBranch size={14} className="text-primary" />
+                  Functional Flow
+                </div>
+                {!diagram && !loading && (
+                  <button
+                    onClick={fetchDiagram}
+                    className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-bold rounded-md border border-primary/20 transition-all uppercase tracking-wider"
+                  >
+                    Generate Diagram
+                  </button>
+                )}
+              </div>
+
+              {loading && (
+                <div className="flex flex-col items-center justify-center py-12 bg-white/[0.02] rounded-xl border border-dashed border-white/5 gap-3">
+                  <Loader2 className="animate-spin text-primary" size={24} />
+                  <p className="text-[11px] text-white/30 font-medium">Analyzing functional execution paths...</p>
+                </div>
+              )}
+
+              {error && (
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-[11px] text-red-400 font-medium leading-relaxed">
+                  <span className="font-bold block mb-1">Analysis Error</span>
+                  {error}
+                </div>
+              )}
+
+              {diagram && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-end gap-2">
+                     <button onClick={() => setDiagram(null)} className="text-[10px] text-white/20 hover:text-white/40 transition-colors uppercase font-bold">Clear</button>
+                  </div>
+                  <MermaidDiagram chart={diagram} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Connections Sections */}
           {outbound.length > 0 && (
-            <ConnectionSection title="References" count={outbound.length} icon="→" groups={groupByType(outbound)} onNavigate={onNavigate} />
+            <ConnectionSection title="Structural References" count={outbound.length} icon="→" groups={groupByType(outbound)} onNavigate={onNavigate} />
           )}
           {inbound.length > 0 && (
-            <ConnectionSection title="Referenced by" count={inbound.length} icon="←" groups={groupByType(inbound)} onNavigate={onNavigate} />
+            <ConnectionSection title="Dependency Graph" count={inbound.length} icon="←" groups={groupByType(inbound)} onNavigate={onNavigate} />
           )}
-          {connections.length === 0 && (
-            <p className="text-[12px] text-foreground/20 text-center py-8">No connections</p>
+          
+          {connections.length === 0 && !canHaveDiagram && (
+            <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-white/[0.02] flex items-center justify-center text-white/10">
+                <GitBranch size={24} />
+              </div>
+              <p className="text-[13px] font-medium text-white/20">No relationships discovered for this node</p>
+            </div>
           )}
         </div>
       </ScrollArea>
@@ -107,34 +202,50 @@ function ConnectionSection({ title, count, icon, groups, onNavigate }: {
   onNavigate: (n: GraphNode) => void;
 }) {
   return (
-    <div>
-      <p className="text-[11px] font-medium text-foreground/40 mb-2">
-        {title} <span className="text-foreground/15">({count})</span>
-      </p>
-      {groups.map(([type, conns]) => (
-        <div key={type} className="mb-2">
-          <p className="text-[9px] text-foreground/20 uppercase tracking-wider mb-1 font-medium">
-            {type.replace(/_/g, " ").toLowerCase()}
-          </p>
-          <div className="space-y-px">
-            {conns.slice(0, 25).map((c, i) => (
-              <button
-                key={`${c.node.id}-${i}`}
-                onClick={() => onNavigate(c.node)}
-                className="flex items-center gap-1.5 w-full text-left px-2 py-[4px] rounded-md hover:bg-white/[0.04] text-[11px] transition-colors group"
-              >
-                <span className="text-foreground/15 text-[10px] group-hover:text-foreground/30">{icon}</span>
-                <span className="w-[5px] h-[5px] rounded-full shrink-0" style={{ backgroundColor: colorForLabel(c.node.label) }} />
-                <span className="text-foreground/55 group-hover:text-foreground/80 truncate">{c.node.name}</span>
-                <span className="text-foreground/10 ml-auto text-[10px] shrink-0">{c.node.label}</span>
-              </button>
-            ))}
-            {conns.length > 25 && (
-              <p className="text-[10px] text-foreground/15 px-2 py-1">+{conns.length - 25} more</p>
-            )}
+    <div className="space-y-5">
+      <div className="flex items-center gap-3">
+        <p className="text-[11px] font-black text-white/40 uppercase tracking-[0.15em]">
+          {title}
+        </p>
+        <div className="h-px flex-1 bg-white/5" />
+        <span className="text-[10px] font-black text-white/15 tabular-nums">{count}</span>
+      </div>
+      
+      <div className="space-y-6">
+        {groups.map(([type, conns]) => (
+          <div key={type} className="space-y-2">
+            <p className="text-[9px] text-white/25 uppercase font-black tracking-widest pl-1">
+              {type.replace(/_/g, " ").toLowerCase()}
+            </p>
+            <div className="grid grid-cols-1 gap-1">
+              {conns.slice(0, 25).map((c, i) => (
+                <button
+                  key={`${c.node.id}-${i}`}
+                  onClick={() => onNavigate(c.node)}
+                  className="flex items-center gap-3 w-full text-left p-2.5 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] border border-transparent hover:border-white/5 text-[12px] transition-all group"
+                >
+                  <div className="w-6 h-6 rounded-lg bg-black/40 flex items-center justify-center text-white/20 group-hover:text-primary transition-colors">
+                    {icon === "→" ? <GitBranch size={12} className="rotate-90" /> : <GitBranch size={12} className="-rotate-90" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-0.5">
+                       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: colorForLabel(c.node.label) }} />
+                       <span className="text-white/70 group-hover:text-white font-semibold truncate transition-colors">{c.node.name}</span>
+                    </div>
+                    <p className="text-[10px] text-white/20 font-medium truncate uppercase tracking-tighter">{c.node.label}</p>
+                  </div>
+                </button>
+              ))}
+              {conns.length > 25 && (
+                <div className="p-3 text-center">
+                   <p className="text-[10px] font-bold text-white/10 uppercase tracking-widest">+{conns.length - 25} more nodes hidden</p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
+

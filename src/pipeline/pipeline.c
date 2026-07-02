@@ -610,6 +610,12 @@ static void predump_deco(cbm_pipeline_ctx_t *ctx) {
 static void predump_route(cbm_pipeline_ctx_t *ctx) {
     cbm_pipeline_create_route_nodes(ctx->gbuf);
 }
+static void predump_contracts(cbm_pipeline_ctx_t *ctx) {
+    cbm_pipeline_create_api_contracts(ctx);
+}
+static void predump_logic(cbm_pipeline_ctx_t *ctx) {
+    cbm_pipeline_tag_business_logic(ctx);
+}
 static void predump_sim(cbm_pipeline_ctx_t *ctx) {
     cbm_pipeline_pass_similarity(ctx);
 }
@@ -630,10 +636,12 @@ static void run_predump_passes(cbm_pipeline_t *p, cbm_pipeline_ctx_t *ctx) {
         bool moderate_only; /* true = skip in fast mode */
     } passes[] = {
         {predump_deco, "decorator_tags", false}, {predump_cfg, "configlink", false},
-        {predump_route, "route_match", false},   {predump_sim, "similarity", true},
+        {predump_route, "route_match", false},   {predump_contracts, "api_contracts", false},
+        {predump_logic, "business_logic", false},
+        {predump_sim, "similarity", true},
         {predump_sem, "semantic_edges", true},   {predump_complexity, "complexity", false},
     };
-    enum { PREDUMP_PASS_COUNT = 6 };
+    enum { PREDUMP_PASS_COUNT = 8 };
     struct timespec t;
     for (int i = 0; i < PREDUMP_PASS_COUNT && !check_cancel(p); i++) {
         /* "moderate_only" passes (similarity/semantic edges) run in FULL,

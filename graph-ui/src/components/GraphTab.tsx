@@ -347,6 +347,7 @@ export function GraphTab({ project }: GraphTabProps) {
           >
             <NodeDetailPanel
               node={selectedNode}
+              project={project}
               allNodes={filteredData.nodes}
               allEdges={filteredData.edges}
               onClose={() => {

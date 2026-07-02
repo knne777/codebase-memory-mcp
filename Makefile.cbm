@@ -198,12 +198,13 @@ PIPELINE_SRCS = \
     src/pipeline/pass_lsp_cross.c \
     src/pipeline/pass_usages.c \
     src/pipeline/pass_semantic.c \
-    src/pipeline/pass_tests.c \
+    src/pipeline/pass_api_contracts.c \
+    src/pipeline/pass_business_logic.c \
+    src/pipeline/pass_route_nodes.c \
     src/pipeline/pass_githistory.c \
     src/pipeline/pass_gitdiff.c \
     src/pipeline/pass_configures.c \
     src/pipeline/pass_configlink.c \
-    src/pipeline/pass_route_nodes.c \
     src/pipeline/pass_enrichment.c \
     src/pipeline/pass_envscan.c \
     src/pipeline/pass_compile_commands.c \

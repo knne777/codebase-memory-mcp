@@ -493,6 +493,19 @@ static const tool_def_t TOOLS[] = {
      "{\"type\":\"object\",\"properties\":{\"traces\":{\"type\":\"array\",\"items\":{\"type\":"
      "\"object\"}},\"project\":{\"type\":"
      "\"string\"}},\"required\":[\"traces\",\"project\"]}"},
+
+    {"generate_diagram", "Generate diagram",
+     "Generate a Mermaid.js diagram (sequence or flowchart) for a code process or functional flow. "
+     "Uses the knowledge graph to trace calls and functional relationships, filtering out technical "
+     "noise and highlighting BusinessRules and Contracts. "
+     "Types: 'sequence' (for temporal call flows), 'flowchart' (for structural logic). "
+     "The result is a Mermaid code block ready for visualization.",
+     "{\"type\":\"object\",\"properties\":{\"project\":{\"type\":\"string\"},"
+     "\"function_name\":{\"type\":\"string\",\"description\":\"Entry point function or route name\"},"
+     "\"type\":{\"type\":\"string\",\"enum\":[\"sequence\",\"flowchart\"],\"default\":\"sequence\"},"
+     "\"depth\":{\"type\":\"integer\",\"default\":3,\"description\":\"Max traversal depth\"},"
+     "\"include_contracts\":{\"type\":\"boolean\",\"default\":true,\"description\":\"Include API Contracts in the diagram\"}"
+     "},\"required\":[\"project\",\"function_name\"]}"},
 };
 
 static const int TOOL_COUNT = sizeof(TOOLS) / sizeof(TOOLS[0]);
@@ -3035,6 +3048,91 @@ static char *get_project_root(cbm_mcp_server_t *srv, const char *project) {
     return root;
 }
 
+/* ── generate_diagram ─────────────────────────────────────────── */
+
+static char *handle_generate_diagram(cbm_mcp_server_t *srv, const char *args) {
+    char *project = get_project_arg(args);
+    char *function_name = cbm_mcp_get_string_arg(args, "function_name");
+    char *type_str = cbm_mcp_get_string_arg(args, "type");
+    int depth = cbm_mcp_get_int_arg(args, "depth", 3);
+    bool include_contracts = cbm_mcp_get_bool_arg(args, "include_contracts");
+
+    if (!project || !function_name) {
+        free(project); free(function_name); free(type_str);
+        return cbm_mcp_text_result("missing project or function_name", true);
+    }
+
+    cbm_store_t *store = resolve_store(srv, project);
+    if (!store) {
+        free(project); free(function_name); free(type_str);
+        return cbm_mcp_text_result("project not indexed", true);
+    }
+
+    cbm_node_t start_node = {0};
+    /* Try find by QN first (precise) */
+    if (cbm_store_find_node_by_qn(store, project, function_name, &start_node) != CBM_STORE_OK) {
+        /* Try find by name (approximate/ambiguous) */
+        cbm_node_t *nodes = NULL;
+        int count = 0;
+        if (cbm_store_find_nodes_by_name(store, project, function_name, &nodes, &count) == CBM_STORE_OK && count > 0) {
+            start_node = nodes[0];
+            /* Free the rest */
+            for (int i = 1; i < count; i++) cbm_node_free_fields(&nodes[i]);
+            free(nodes);
+        }
+    }
+
+    if (start_node.id <= 0) {
+        char msg[CBM_SZ_256];
+        snprintf(msg, sizeof(msg), "symbol not found: %s", function_name);
+        free(project); free(function_name); free(type_str);
+        return cbm_mcp_text_result(msg, true);
+    }
+
+    const char *all_edge_types[] = {"CALLS", "HTTP_CALLS", "HANDLES", "IMPLEMENTS_RULE", "HAS_CONTRACT"};
+    int edge_type_count = include_contracts ? 5 : 4;
+    
+    cbm_traverse_result_t res = {0};
+    cbm_store_bfs(store, start_node.id, "outbound", all_edge_types, edge_type_count, depth, 100, &res);
+
+    /* Build Mermaid string */
+    size_t m_cap = CBM_SZ_16K;
+    char *mermaid = malloc(m_cap);
+    size_t m_len = 0;
+    
+    bool is_seq = (type_str && strcmp(type_str, "sequence") == 0);
+    const char *header = is_seq ? "sequenceDiagram\n" : "graph TD\n";
+    m_len += snprintf(mermaid + m_len, m_cap - m_len, "%s", header);
+
+    for (int i = 0; i < res.edge_count && m_len < m_cap - CBM_SZ_256; i++) {
+        cbm_edge_info_t *e = &res.edges[i];
+        if (!e->from_name || !e->to_name) continue;
+        
+        if (is_seq) {
+            m_len += snprintf(mermaid + m_len, m_cap - m_len, "    %s->>%s: %s\n", e->from_name, e->to_name, e->type);
+        } else {
+            m_len += snprintf(mermaid + m_len, m_cap - m_len, "    %s -- %s --> %s\n", e->from_name, e->type, e->to_name);
+        }
+    }
+
+    char *out = cbm_mcp_text_result(mermaid, false);
+
+    cbm_store_traverse_free(&res);
+    cbm_node_free_fields(&start_node);
+    free(mermaid);
+    free(project);
+    free(function_name);
+    free(type_str);
+
+    return out;
+}
+    cbm_node_free_fields(&start_node);
+    free(mermaid);
+    free(project); free(function_name); free(type_str);
+
+    return out;
+}
+
 /* ── index_repository ─────────────────────────────────────────── */
 
 /* Handle mode="cross-repo-intelligence" — extract to reduce complexity. */
@@ -5051,6 +5149,9 @@ char *cbm_mcp_handle_tool(cbm_mcp_server_t *srv, const char *tool_name, const ch
     }
     if (strcmp(tool_name, "ingest_traces") == 0) {
         return handle_ingest_traces(srv, args_json);
+    }
+    if (strcmp(tool_name, "generate_diagram") == 0) {
+        return handle_generate_diagram(srv, args_json);
     }
     char msg[CBM_SZ_256];
     snprintf(msg, sizeof(msg), "unknown tool: %s", tool_name);

@@ -450,6 +450,16 @@ int cbm_parallel_resolve(cbm_pipeline_ctx_t *ctx, const cbm_file_info_t *files, 
  * Re-targets these edges to Route nodes for cross-service traversal. */
 void cbm_pipeline_create_route_nodes(cbm_gbuf_t *gb);
 
+/* Post-route-merge: extract and link API Contracts to Route nodes.
+ * Iterates over Routes, finds their handler Functions, and creates
+ * Contract nodes with serialized parameter/return types. */
+void cbm_pipeline_create_api_contracts(cbm_pipeline_ctx_t *ctx);
+
+/* Post-contract-merge: tag functions containing business logic.
+ * Uses heuristics (complexity, naming, paths) to identify core
+ * logic and creates BusinessRule nodes or tags. */
+void cbm_pipeline_tag_business_logic(cbm_pipeline_ctx_t *ctx);
+
 /* ── Pass function prototypes ────────────────────────────────────── */
 
 int cbm_pipeline_pass_definitions(cbm_pipeline_ctx_t *ctx, const cbm_file_info_t *files,
