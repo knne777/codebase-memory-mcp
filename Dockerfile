@@ -46,5 +46,5 @@ ENV REPOSITORIES_DIR="/repositories"
 # Crear directorio de trabajo para los repositorios de código a indexar
 WORKDIR /repositories
 
-# Ejecutar socat en segundo plano para redirigir el tráfico de la UI, y luego supergateway
-ENTRYPOINT ["sh", "-c", "socat TCP-LISTEN:9749,fork,reuseaddr TCP:127.0.0.1:9750 & supergateway --port ${PORT} --baseUrl ${BASE_URL} --stdio \"/usr/local/bin/codebase-memory-mcp --ui=true --port=9750\""]
+# Ejecutar socat en segundo plano para redirigir el tráfico de la UI, y luego supergateway con soporte CORS
+ENTRYPOINT ["sh", "-c", "socat TCP-LISTEN:9749,fork,reuseaddr TCP:127.0.0.1:9750 & supergateway --port ${PORT} --baseUrl ${BASE_URL} --cors --stdio \"/usr/local/bin/codebase-memory-mcp --ui=true --port=9750\""]

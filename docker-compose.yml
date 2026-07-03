@@ -5,13 +5,15 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
-      - "9749:9749"
+      - "9755:9749"
     environment:
       - PORT=8080
       # Cambia esta IP por la IP de tu máquina en la red local (ej. 192.168.100.147)
-      - BASE_URL=http://192.168.100.147:8080
+      - BASE_URL=http://127.0.0.1:8080
     volumes:
       # Monta el directorio del host donde guardas tus repositorios.
       # Dentro del contenedor estarán en '/repositories' para poder indexarlos.
       - /media/knne/79bff957-1fde-45c4-8522-a19d7453609c/memoria:/repositories
+      # Compartir la base de datos de grafos de caché entre el host y el contenedor
+      - /home/knne/.cache/codebase-memory-mcp:/root/.cache/codebase-memory-mcp
     restart: unless-stopped
