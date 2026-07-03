@@ -1,0 +1,10 @@
+.git
+.github
+node_modules
+graph-ui/node_modules
+graph-ui/dist
+build
+.gemini
+brain
+.system_generated
+*.log

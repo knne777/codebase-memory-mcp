@@ -3126,12 +3126,6 @@ static char *handle_generate_diagram(cbm_mcp_server_t *srv, const char *args) {
 
     return out;
 }
-    cbm_node_free_fields(&start_node);
-    free(mermaid);
-    free(project); free(function_name); free(type_str);
-
-    return out;
-}
 
 /* ── index_repository ─────────────────────────────────────────── */
 

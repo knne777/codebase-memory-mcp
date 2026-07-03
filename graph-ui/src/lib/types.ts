@@ -8,6 +8,9 @@ export interface GraphNode {
   label: string;
   name: string;
   file_path?: string;
+  start_line?: number;
+  qualified_name?: string;
+  properties_json?: string;
   size: number;
   color: string;
 }

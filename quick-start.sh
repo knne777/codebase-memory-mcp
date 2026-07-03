@@ -19,7 +19,7 @@ if command -v npm &> /dev/null; then
     npm run build --silent
     cd ..
     # Embed UI into C source
-    bash scripts/embed-frontend.sh
+    bash scripts/embed-frontend.sh graph-ui/dist build/embedded
 else
     echo "Warning: npm not found. UI might be missing or using stale assets."
 fi
